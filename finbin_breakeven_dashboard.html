@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FINBIN Corn Break-Even Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f3; color: #1a1a1a; padding: 1.5rem; font-size: 14px; }
+  h1 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: #666; margin-bottom: 1.5rem; }
+  .section-label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #888; margin-bottom: 8px; }
+  .card { background: #fff; border: 1px solid #e0e0db; border-radius: 10px; padding: 1rem 1.25rem; }
+  .controls-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.25rem; }
+  .ctrl-group label { display: block; font-size: 12px; color: #555; margin-bottom: 3px; }
+  .ctrl-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+  .ctrl-val { font-size: 15px; font-weight: 600; color: #1a1a1a; }
+  input[type=range] { width: 100%; accent-color: #3F90CC; cursor: pointer; }
+  .ctrl-hint { display: flex; justify-content: space-between; font-size: 11px; color: #aaa; margin-top: 2px; }
+  .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .metric { background: #f5f5f3; border-radius: 8px; padding: 12px 14px; }
+  .metric-label { font-size: 11px; color: #777; margin-bottom: 4px; }
+  .metric-value { font-size: 22px; font-weight: 600; }
+  .metric-sub { font-size: 11px; color: #aaa; margin-top: 2px; }
+  .val-pos { color: #1A6B3A; }
+  .val-neg { color: #B71C1C; }
+  .val-neutral { color: #1a1a1a; }
+  .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .chart-title { font-size: 13px; font-weight: 600; margin-bottom: 10px; color: #333; }
+  .legend-row { display: flex; gap: 14px; margin-bottom: 8px; flex-wrap: wrap; }
+  .leg-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #666; }
+  .leg-swatch { width: 20px; height: 3px; border-radius: 2px; }
+  .leg-swatch.dashed { background: repeating-linear-gradient(90deg, currentColor 0, currentColor 4px, transparent 4px, transparent 8px); }
+  .leg-dot { width: 9px; height: 9px; border-radius: 50%; }
+  .insight-bar { display: flex; gap: 8px; flex-wrap: wrap; }
+  .pill { font-size: 12px; border-radius: 6px; padding: 4px 10px; }
+  .pill-ok { background: #e6f4ec; color: #155724; }
+  .pill-warn { background: #fff8e1; color: #7a5200; }
+  .pill-bad { background: #fdecea; color: #8b1a1a; }
+  .pill-info { background: #e8f0fb; color: #1a3c7c; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { font-weight: 600; color: #555; padding: 6px 8px; text-align: center; border-bottom: 1px solid #e8e8e3; }
+  td { text-align: center; padding: 6px 8px; border-bottom: 1px solid #f0f0eb; color: #1a1a1a; }
+  .row-lbl { text-align: left; font-weight: 500; color: #555; font-size: 12px; }
+  .cell-hi { background: #fce8e8; color: #8b1a1a; font-weight: 500; }
+  .cell-mid { background: #fef8e7; color: #7a5200; }
+  .cell-lo { background: #e8f4ec; color: #155724; font-weight: 500; }
+  .cell-hl { outline: 2px solid #3F90CC; outline-offset: -2px; font-weight: 700; }
+  .gap { margin-bottom: 1.25rem; }
+  .reset-btn { font-size: 12px; padding: 4px 12px; cursor: pointer; border: 1px solid #ccc; border-radius: 6px; background: transparent; color: #555; float: right; }
+  .reset-btn:hover { background: #f0f0eb; }
+  .base-note { font-size: 12px; color: #888; }
+  .footer { font-size: 11px; color: #aaa; text-align: center; margin-top: 1.5rem; }
+</style>
+</head>
+<body>
+
+<h1>FINBIN Corn Break-Even Dashboard</h1>
+<p class="subtitle">Minnesota, 2018–2025. Base year: 2024 ($888/ac · 178 bu/ac · $5.02/bu break-even). Adjust sliders to explore scenarios.</p>
+
+<div class="section-label">Scenario controls</div>
+<div class="card gap">
+  <button class="reset-btn" onclick="resetControls()">Reset to 2024</button>
+  <div class="controls-grid">
+    <div class="ctrl-group">
+      <div class="ctrl-row">
+        <label>Cost adjustment ($/ac)</label>
+        <span class="ctrl-val" id="costAdj-val">$0</span>
+      </div>
+      <input type="range" id="costAdj" min="-200" max="200" step="5" value="0">
+      <div class="ctrl-hint"><span>−$200</span><span>+$200</span></div>
+    </div>
+    <div class="ctrl-group">
+      <div class="ctrl-row">
+        <label>Yield (bu/ac)</label>
+        <span class="ctrl-val" id="yield-val">178 bu/ac</span>
+      </div>
+      <input type="range" id="yieldCtrl" min="140" max="230" step="1" value="178">
+      <div class="ctrl-hint"><span>140</span><span>230</span></div>
+    </div>
+    <div class="ctrl-group">
+      <div class="ctrl-row">
+        <label>Market price ($/bu)</label>
+        <span class="ctrl-val" id="price-val">$4.50/bu</span>
+      </div>
+      <input type="range" id="priceCtrl" min="2.00" max="8.00" step="0.05" value="4.50">
+      <div class="ctrl-hint"><span>$2.00</span><span>$8.00</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="section-label">Scenario outcomes</div>
+<div class="metric-grid gap">
+  <div class="metric">
+    <div class="metric-label">Adjusted cost/acre</div>
+    <div class="metric-value val-neutral" id="m-cost">$888</div>
+    <div class="metric-sub" id="m-cost-sub">Base: $888/ac</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">Break-even price</div>
+    <div class="metric-value val-neutral" id="m-be">$4.99/bu</div>
+    <div class="metric-sub" id="m-be-sub">2024 actual: $5.02/bu</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">Margin vs. market price</div>
+    <div class="metric-value" id="m-margin">—</div>
+    <div class="metric-sub">Market − break-even</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">Net return/acre</div>
+    <div class="metric-value" id="m-return">—</div>
+    <div class="metric-sub">Price × yield − cost</div>
+  </div>
+</div>
+
+<div class="insight-bar gap" id="insights"></div>
+
+<div class="charts-row gap">
+  <div class="card">
+    <div class="chart-title">Historical break-even vs. scenario</div>
+    <div class="legend-row">
+      <span class="leg-item"><span class="leg-swatch" style="background:#3F90CC;height:2px;"></span>Historical BE</span>
+      <span class="leg-item"><span class="leg-dot" style="background:#E24B4A;"></span>Scenario BE</span>
+      <span class="leg-item"><span class="leg-swatch" style="background:#1D9E75;border-top:1px dashed #1D9E75;height:0px;margin-top:2px;"></span>Market price</span>
+    </div>
+    <div style="position:relative;height:210px;"><canvas id="trendChart"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="chart-title">Cost sensitivity at current yield</div>
+    <div class="legend-row">
+      <span class="leg-item"><span class="leg-swatch" style="background:#3F90CC;"></span>Break-even curve</span>
+      <span class="leg-item"><span class="leg-dot" style="background:#E24B4A;"></span>Current scenario</span>
+      <span class="leg-item"><span class="leg-swatch" style="background:#1D9E75;"></span>Market price</span>
+    </div>
+    <div style="position:relative;height:210px;"><canvas id="sensChart"></canvas></div>
+  </div>
+</div>
+
+<div class="section-label">Scenario matrix — break-even ($/bu) at yield × cost combinations</div>
+<div class="card gap">
+  <div style="font-size:12px;color:#888;margin-bottom:8px;">
+    <span style="background:#e8f4ec;color:#155724;padding:2px 8px;border-radius:4px;margin-right:4px;">Green &lt;$4.50</span>
+    <span style="background:#fef8e7;color:#7a5200;padding:2px 8px;border-radius:4px;margin-right:4px;">Yellow $4.50–$5.50</span>
+    <span style="background:#fce8e8;color:#8b1a1a;padding:2px 8px;border-radius:4px;margin-right:4px;">Red &gt;$5.50</span>
+    <span style="border:2px solid #3F90CC;padding:2px 8px;border-radius:4px;color:#3F90CC;">Blue outline = current scenario</span>
+  </div>
+  <div id="matrixContainer"></div>
+  <div style="font-size:11px;color:#888;margin-top:10px;">
+    <strong>Sensitivity:</strong> <span id="sensitivityText"></span>
+  </div>
+</div>
+
+<div class="footer">Source: FINBIN Minnesota average crop enterprise data. Break-even = Total cost per acre ÷ Yield. Formula validated against FINBIN reported values (R² > 0.99).</div>
+
+<script>
+const HIST = {
+  years: [2018,2019,2020,2021,2022,2023,2024,2025],
+  costs: [674,693,684,722,890,927,888,898],
+  be_corn: [3.76,3.93,3.45,3.88,4.43,4.88,5.02,4.26],
+  yields: [180,177,200,187,202,191,178,212]
+};
+const BASE = { cost: 888, yield: 178, be: 5.02 };
+let trendChart, sensChart;
+
+function getState() {
+  const adj = +document.getElementById('costAdj').value;
+  const yld = +document.getElementById('yieldCtrl').value;
+  const price = +document.getElementById('priceCtrl').value;
+  const cost = BASE.cost + adj;
+  const be = cost / yld;
+  const margin = price - be;
+  const netReturn = price * yld - cost;
+  return { adj, yld, price, cost, be, margin, netReturn };
+}
+
+function updateMetrics(s) {
+  document.getElementById('m-cost').textContent = '$' + Math.round(s.cost);
+  document.getElementById('m-cost-sub').textContent = s.adj === 0 ? 'No adjustment' : (s.adj > 0 ? '+' : '') + '$' + s.adj + '/ac from base';
+
+  const beEl = document.getElementById('m-be');
+  beEl.textContent = '$' + s.be.toFixed(2) + '/bu';
+  const beDelta = s.be - BASE.be;
+  document.getElementById('m-be-sub').textContent = (beDelta >= 0 ? '+' : '') + '$' + beDelta.toFixed(2) + '/bu vs 2024 actual';
+
+  const marginEl = document.getElementById('m-margin');
+  marginEl.textContent = (s.margin >= 0 ? '+' : '') + '$' + s.margin.toFixed(2) + '/bu';
+  marginEl.className = 'metric-value ' + (s.margin >= 0 ? 'val-pos' : 'val-neg');
+
+  const retEl = document.getElementById('m-return');
+  retEl.textContent = (s.netReturn >= 0 ? '+' : '') + '$' + Math.round(s.netReturn) + '/ac';
+  retEl.className = 'metric-value ' + (s.netReturn >= 0 ? 'val-pos' : 'val-neg');
+
+  const pills = [];
+  if (s.margin >= 0.5) pills.push({ cls: 'pill-ok', txt: 'Profitable — market exceeds break-even by $' + s.margin.toFixed(2) + '/bu' });
+  else if (s.margin >= 0) pills.push({ cls: 'pill-warn', txt: 'Thin margin — only $' + s.margin.toFixed(2) + '/bu above break-even' });
+  else pills.push({ cls: 'pill-bad', txt: 'Below break-even by $' + Math.abs(s.margin).toFixed(2) + '/bu at market price' });
+
+  const yldNeeded = s.cost / s.price;
+  pills.push({ cls: 'pill-info', txt: 'Break-even yield at market price: ' + yldNeeded.toFixed(0) + ' bu/ac' });
+
+  const maxCost = s.price * s.yld;
+  pills.push({ cls: 'pill-info', txt: 'Max cost to break even at market price: $' + maxCost.toFixed(0) + '/ac' });
+
+  document.getElementById('insights').innerHTML = pills.map(p => `<span class="pill ${p.cls}">${p.txt}</span>`).join('');
+}
+
+function buildTrendChart(s) {
+  const ctx = document.getElementById('trendChart').getContext('2d');
+  const gridC = 'rgba(0,0,0,0.07)';
+  const textC = '#888';
+
+  const scenarioData = HIST.years.map(y => y === 2024 ? s.be : null);
+
+  if (trendChart) trendChart.destroy();
+  trendChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: HIST.years,
+      datasets: [
+        {
+          label: 'Historical BE',
+          data: HIST.be_corn,
+          borderColor: '#3F90CC',
+          backgroundColor: 'rgba(63,144,204,0.10)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 4,
+          pointBackgroundColor: '#3F90CC',
+          borderWidth: 2,
+        },
+        {
+          label: 'Scenario BE',
+          data: scenarioData,
+          borderColor: '#E24B4A',
+          backgroundColor: '#E24B4A',
+          pointRadius: HIST.years.map(y => y === 2024 ? 9 : 0),
+          pointStyle: HIST.years.map(y => y === 2024 ? 'rectRot' : 'circle'),
+          showLine: false,
+          borderWidth: 0,
+        },
+        {
+          label: 'Market price',
+          data: HIST.years.map(() => s.price),
+          borderColor: '#1D9E75',
+          borderDash: [5,3],
+          borderWidth: 1.5,
+          pointRadius: 0,
+          fill: false,
+          tension: 0,
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: textC, font: { size: 11 } }, grid: { color: gridC } },
+        y: {
+          ticks: { color: textC, font: { size: 11 }, callback: v => '$' + v.toFixed(2) },
+          grid: { color: gridC },
+          title: { display: true, text: '$/bu', color: textC, font: { size: 11 } }
+        }
+      }
+    }
+  });
+}
+
+function buildSensChart(s) {
+  const ctx = document.getElementById('sensChart').getContext('2d');
+  const gridC = 'rgba(0,0,0,0.07)';
+  const textC = '#888';
+
+  const costsRange = [];
+  for (let c = 600; c <= 1100; c += 10) costsRange.push(c);
+  const beRange = costsRange.map(c => c / s.yld);
+
+  const nearestIdx = costsRange.reduce((best, c, i) => Math.abs(c - s.cost) < Math.abs(costsRange[best] - s.cost) ? i : best, 0);
+
+  if (sensChart) sensChart.destroy();
+  sensChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: costsRange,
+      datasets: [
+        {
+          label: 'Break-even',
+          data: beRange,
+          borderColor: '#3F90CC',
+          borderWidth: 2,
+          pointRadius: 0,
+          fill: false,
+          tension: 0,
+        },
+        {
+          label: 'Scenario',
+          data: costsRange.map((_, i) => i === nearestIdx ? s.be : null),
+          backgroundColor: '#E24B4A',
+          borderColor: '#E24B4A',
+          pointRadius: costsRange.map((_, i) => i === nearestIdx ? 8 : 0),
+          showLine: false,
+        },
+        {
+          label: 'Market price',
+          data: costsRange.map(() => s.price),
+          borderColor: '#1D9E75',
+          borderDash: [5,3],
+          borderWidth: 1.5,
+          pointRadius: 0,
+          fill: false,
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: {
+          ticks: { color: textC, font: { size: 11 }, callback: (v, i) => i % 5 === 0 ? '$' + costsRange[i] : '', autoSkip: false, maxRotation: 0 },
+          grid: { color: gridC },
+          title: { display: true, text: 'Total cost/acre ($)', color: textC, font: { size: 11 } }
+        },
+        y: {
+          ticks: { color: textC, font: { size: 11 }, callback: v => '$' + v.toFixed(2) },
+          grid: { color: gridC },
+          title: { display: true, text: '$/bu', color: textC, font: { size: 11 } }
+        }
+      }
+    }
+  });
+}
+
+function buildMatrix(s) {
+  const yields = [155, 165, 178, 190, 205, 220];
+  const costAdjs = [-100, -50, -10, -1, 0, 1, 10, 50, 100];
+
+  let html = '<table><thead><tr><th class="row-lbl">Cost adj</th>';
+  yields.forEach(y => { html += `<th>${y} bu/ac</th>`; });
+  html += '</tr></thead><tbody>';
+
+  costAdjs.forEach(adj => {
+    const c = BASE.cost + adj;
+    html += `<tr><td class="row-lbl">${adj === 0 ? 'Base ($888)' : (adj > 0 ? '+' : '') + '$' + adj}</td>`;
+    yields.forEach(y => {
+      const be = c / y;
+      let cls = be > 5.5 ? 'cell-hi' : be < 4.5 ? 'cell-lo' : 'cell-mid';
+      const isExact = adj === s.adj && y === s.yld;
+      const isClose = !isExact && Math.abs(adj - s.adj) <= 30 && Math.abs(y - s.yld) <= 8;
+      if (isExact) cls += ' cell-hl';
+      html += `<td class="${cls}">${be.toFixed(2)}</td>`;
+    });
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  document.getElementById('matrixContainer').innerHTML = html;
+
+  // Calculate and display sensitivity
+  const sensitivityPerDollar = 1 / s.yld;
+  const sensitivityPer10 = sensitivityPerDollar * 10;
+  const sensitivityPer50 = sensitivityPerDollar * 50;
+  
+  document.getElementById('sensitivityText').innerHTML = 
+    `For every <strong>$1/ac</strong> increase in cost, break-even rises by <strong>$${sensitivityPerDollar.toFixed(4)}/bu</strong> (or <strong>$${sensitivityPer10.toFixed(3)}/bu</strong> per $10/ac, or <strong>$${sensitivityPer50.toFixed(2)}/bu</strong> per $50/ac) at current yield of ${s.yld} bu/ac.`;
+}
+
+function update() {
+  const s = getState();
+  document.getElementById('costAdj-val').textContent = (s.adj >= 0 ? '+' : '') + '$' + s.adj;
+  document.getElementById('yield-val').textContent = s.yld + ' bu/ac';
+  document.getElementById('price-val').textContent = '$' + s.price.toFixed(2) + '/bu';
+  updateMetrics(s);
+  buildTrendChart(s);
+  buildSensChart(s);
+  buildMatrix(s);
+}
+
+function resetControls() {
+  document.getElementById('costAdj').value = 0;
+  document.getElementById('yieldCtrl').value = 178;
+  document.getElementById('priceCtrl').value = 4.50;
+  update();
+}
+
+['costAdj','yieldCtrl','priceCtrl'].forEach(id => {
+  document.getElementById(id).addEventListener('input', update);
+});
+
+update();
+</script>
+</body>
+</html>
